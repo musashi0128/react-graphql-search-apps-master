@@ -1,21 +1,27 @@
 import React, { Component } from 'react'
+// ReactでGraphqlを使用するときに、Apolloの使用で大体必要なもの
 import { ApolloProvider, Mutation, Query } from 'react-apollo'
 import client from './client'
 import { ADD_STAR, REMOVE_STAR, SEARCH_REPOSITORIES } from './graphql'
 
 const StarButton = props => {
+  // nodeが対象のRepositoryとなる -> githubのAPIが固定している
   const { node, query, first, last, before, after } = props
+  // 対象のRepositoryが所有するStarの総数
   const totalCount = node.stargazers.totalCount
   const viewerHasStarred = node.viewerHasStarred
+  // totalCountの情報をみて、条件分岐 -> 存在する場合としない場合で文言を変える
   const starCount = totalCount === 1 ? "1 star" : `${totalCount} stars`
-  const StarStatus = ({starStatus}) => {
+  const StarStatus = ({addOrRemoveStar}) => {
     return (
       <button
         onClick={
-          () => starStatus({
+          () => addOrRemoveStar({
             variables: { input: { starrableId: node.id } },
-            update: (store, {data: { addStar, removeStar }}) => {
+            update: (store, { data: { addStar, removeStar }}) => {
               const { starrable } = addStar || removeStar
+              console.log(starrable)
+              // dataに対象のRepositoryを入れる
               const data = store.readQuery({
                 query: SEARCH_REPOSITORIES,
                 variables:  { query, first, last, after, before }
@@ -26,7 +32,7 @@ const StarButton = props => {
                   const totalCount = edge.node.stargazers.totalCount
                   const diff = starrable.viewerHasStarred ? 1 : -1
                   const newTotalCount = totalCount + diff
-                  edge.node.stargazers.totalCount =  newTotalCount
+                  edge.node.stargazers.totalCount = newTotalCount
                 }
                 return edge
               })
@@ -45,29 +51,29 @@ const StarButton = props => {
     <Mutation
       mutation={viewerHasStarred ? REMOVE_STAR : ADD_STAR}
       refetchQueries={mutationResult => {
+        console.log({mutationResult})
         return [
           {
             query: SEARCH_REPOSITORIES,
-            variables: { query, first, last, before, after}
+            variables: { query, first, last, before, after }
           }
         ]
       }}
     >
       {
-        starStatus => <StarStatus starStatus={starStatus} />
+        addOrRemoveStar => <StarStatus addOrRemoveStar={addOrRemoveStar} />
       }
     </Mutation>
   )
 }
 
 const PER_PAGE = 5
-
 const DEFAULT_STATE = {
   first: PER_PAGE,
   after: null,
   last: null,
   before: null,
-  query: ""
+  query: "react-graphql-search-apps-master"
 }
 
 class App extends Component {
@@ -86,7 +92,7 @@ class App extends Component {
       query: this.myRef.current.value
     })
   }
-
+   // 前ページへ -> stateをlastに
   goPrevious(search) {
     this.setState({
       first: null,
@@ -95,7 +101,7 @@ class App extends Component {
       before: search.pageInfo.startCursor
     })
   }
-
+  // 次ページへ -> stateをfirstに
   goNext(search) {
     this.setState({
       first: PER_PAGE,
@@ -106,13 +112,13 @@ class App extends Component {
   }
 
   render() {
-    const {query, first, after, last, before} = this.state
+    const { query, first, last, before, after } = this.state
 
     return (
       <ApolloProvider client={client}>
         <form onSubmit={this.handleSubmit}>
-          <input ref={this.myRef} />
-          <input  type="submit" value="Submit" />
+          <input ref={this.myRef}/>
+          <input type="submit" value="Submit" />
         </form>
         <Query
           query={SEARCH_REPOSITORIES}
@@ -126,8 +132,7 @@ class App extends Component {
               const search = data.search
               const repositoryCount = search.repositoryCount
               const repositoryUnit = repositoryCount === 1 ? 'Repository' : 'Repositories'
-              const title = `Github Repositories Search Results - ${repositoryCount} ${repositoryUnit}`
-
+              const title = `GitHub Repositories Search Results - ${repositoryCount} ${repositoryUnit}`
               return (
                 <React.Fragment>
                   <h2>{title}</h2>
@@ -135,6 +140,7 @@ class App extends Component {
                     {
                       search.edges.map(edge => {
                         const node = edge.node
+
                         return (
                           <li key={node.id}>
                             <a href={node.url} target="_blank" rel="noopener noreferrer">{node.name}</a>
@@ -145,6 +151,7 @@ class App extends Component {
                       })
                     }
                   </ul>
+
                   {
                     search.pageInfo.hasPreviousPage === true ?
                       <button
@@ -152,15 +159,17 @@ class App extends Component {
                       >
                         Previous
                       </button>
-                    :
-                    null
+                      :
+                      null
                   }
                   {
                     search.pageInfo.hasNextPage === true ?
-                      <button onClick={this.goNext.bind(this, search)}>
+                      <button
+                        onClick={this.goNext.bind(this, search)}
+                      >
                         Next
                       </button>
-                    :
+                      :
                       null
                   }
                 </React.Fragment>
